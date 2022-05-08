@@ -1,10 +1,8 @@
 version: 2.1
 orbs:
-  node: circleci/node@4.2.0
-  aws-cli: circleci/aws-cli@3.0.0
-  eb: circleci/aws-elastic-beanstalk@2.0.1
+  node: circleci/node@5.0.2
+  aws-cli: circleci/aws-cli@3.1.1
 jobs:
-  # job To Deploy & Test Frontend
   frontend:
     working_directory: ~/app/udagram-frontend
     executor: node/default
@@ -13,49 +11,38 @@ jobs:
           path: ~/app
       - node/install-packages:
           app-dir: ~/app/udagram-frontend
-
-      # Run Npm Build To Install Dependencies
       - run:
           name: Build Frontend
           command: npm run build
-      # Install & Setup AWS CLI
       - aws-cli/install
-      - eb/setup
-      # Upload Frontend To S3
       - run:
           name: Deploy Frontend
           command: aws s3 cp --recursive --acl public-read ./www s3://yahya-udagram
-  # job To Deploy & Test Backend
-  backend:
-    working_directory: ~/app/udagram-backend
+
+  server:
+    working_directory: ~/app/udagram-api
     executor: node/default
     steps:
       - checkout:
           path: ~/app
       - node/install-packages:
-          app-dir: ~/app/udagram-backend
-      # Run Npm Build To Install Dependencies
+          app-dir: ~/app/udagram-api
       - run:
-          name: Build & Archive Backend
-          command: npm run build
-      # Install & Setup AWS CLI
+          name: Build and Archive Server
+          command: |-
+            npm run build
+            printenv > www/.env
+            npm run archive
       - aws-cli/install
-      - eb/setup
-      # Copy Build From S3
       - run:
-          name: Copy Build From S3
-          command: aws s3 cp ./www/Archive.zip s3://elasticbeanstalk-us-east-1-723039717324
-      # Copy ENV To www/.env
-      - run:
-          name: Copy ENV To www/.env
-          command: printenv > www/.env
-      # Update EB Environment
-      - run:
-          name: Update Environment
-          command: |
-            eb init --region us-east-1 --platform Node.js udagram-api && eb deploy udagram-api-dev && eb setenv POSTGRES_USERNAME=$POSTGRES_USERNAME POSTGRES_PASSWORD=$POSTGRES_PASSWORD  POSTGRES_DB=$POSTGRES_DB POSTGRES_HOST=$POSTGRES_HOST DB_PORT=$DB_PORT PORT=$PORT AWS_REGION=$AWS_REGION AWS_PROFILE=$AWS_PROFILE AWS_BUCKET=$AWS_BUCKET URL=$URL JWT_SECRET=$JWT_SECRET
+          name: Deploy Server
+          command: |-
+            aws s3 cp ./www/Archive.zip S3:// elasticbeanstalk-us-east-1-723039717324
+            aws elasticbeanstalk create-application-version --application-name $EB_APP --version-label <<pipeline.git.revision>> --source-bundle S3Bucket="$EB_BUCKET",S3Key="Archive.zip"
+            aws elasticbeanstalk update-environment --application-name $EB_APP --environment-name $EB_ENV --version-label <<pipeline.git.revision>>
+
 workflows:
-  Install And Deploy App:
+  build_and_deploy:
     jobs:
       - frontend
-      - backend
+      - server
