@@ -10,8 +10,6 @@ workflow:
            only: master
 jobs:
   build:
-    docker:
-      - image: "cimg/base:stable"
     steps:
       - node/install:
           node-version: '16.13'
