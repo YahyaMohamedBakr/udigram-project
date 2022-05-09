@@ -9,7 +9,7 @@ workflow:
         branches:
            only: master
 jobs:
-  launch:
+  build:
     docker:
       - image: "cimg/base:stable"
       #install and setup orbs
